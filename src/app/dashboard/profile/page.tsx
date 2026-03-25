@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   User, GraduationCap, Code, Award, Briefcase, ExternalLink,
-  Edit3, Save, Github, Linkedin, BookOpen, Plus, X
+  Edit3, Save, Link2, Globe, BookOpen, Plus, X
 } from 'lucide-react';
 
 export default function ProfilePage() {
@@ -109,10 +109,10 @@ export default function ProfilePage() {
             </div>
             <div className="flex gap-2 ml-auto">
               <a href="#" className="btn-icon w-9 h-9" title="LinkedIn">
-                <Linkedin size={16} />
+                <Link2 size={16} />
               </a>
               <a href="#" className="btn-icon w-9 h-9" title="GitHub">
-                <Github size={16} />
+                <Globe size={16} />
               </a>
             </div>
           </div>

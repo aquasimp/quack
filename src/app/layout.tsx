@@ -38,7 +38,8 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <head>
+      <body suppressHydrationWarning className="min-h-full flex flex-col">
+        <AuthProvider>{children}</AuthProvider>
         {GA_TRACKING_ID && (
           <>
             <Script
@@ -55,9 +56,6 @@ export default function RootLayout({
             </Script>
           </>
         )}
-      </head>
-      <body suppressHydrationWarning className="min-h-full flex flex-col">
-        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );
