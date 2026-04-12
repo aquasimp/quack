@@ -84,26 +84,6 @@ NEXT_PUBLIC_GA_ID=G-XXXXXXXXXX  # Optional
 
 ---
 
-## 📸 Screenshots
-
-<div align="center">
-
-### Landing Page
-> Premium glassmorphic dark UI with animated gradient backgrounds
-
-### Communication Hub
-> Folder-based group chat with E2E encryption badges
-
-### AI Career Intelligence
-> Resume analysis with readiness scoring and personalized roadmaps
-
-### Recruiter Search Portal
-> Natural language → AI-powered candidate matching
-
-</div>
-
----
-
 ## 📁 Project Structure
 
 ```
