@@ -1,4 +1,4 @@
-import { test, describe, beforeEach, afterEach } from 'node:test';
+﻿import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { signToken, verifyToken, JWTPayload } from '../src/lib/auth';
 
@@ -7,7 +7,7 @@ describe('Authentication & JWT Security Module', () => {
 
   beforeEach(() => {
     process.env.JWT_SECRET = 'super-secure-production-ready-jwt-secret-key-12345';
-    process.env.NODE_ENV = 'test';
+    (process.env as Record<string, string | undefined>).NODE_ENV = 'test';
   });
 
   afterEach(() => {
@@ -87,7 +87,7 @@ describe('Authentication & JWT Security Module', () => {
 
   test('requires JWT_SECRET in production environment', () => {
     delete process.env.JWT_SECRET;
-    process.env.NODE_ENV = 'production';
+    (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
 
     const payload: JWTPayload = {
       userId: 'usr_prod_test',

@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from 'mongoose';
+﻿import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IProject {
   name: string;
@@ -45,5 +45,8 @@ const ProfileSchema = new Schema<IProfile>({
   linkedin: { type: String, default: '' },
   github: { type: String, default: '' },
 }, { timestamps: true });
+
+ProfileSchema.index({ branch: 1, cgpa: -1 });
+ProfileSchema.index({ skills: 1 });
 
 export default mongoose.models.Profile || mongoose.model<IProfile>('Profile', ProfileSchema);

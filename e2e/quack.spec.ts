@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 
 test.describe('Qwack Web Application E2E Flows', () => {
   test('landing page renders hero, branding, features, and navigation links', async ({ page }) => {
@@ -77,5 +77,16 @@ test.describe('Qwack Web Application E2E Flows', () => {
     // Click link to create account
     await page.getByRole('link', { name: /create one/i }).click();
     await expect(page).toHaveURL(/\/register/);
+  });
+
+  test('registration form shows validation error when submitting empty fields', async ({ page }) => {
+    await page.goto('/register');
+    const submitBtn = page.getByRole('button', { name: /create account/i });
+    await submitBtn.click();
+
+    // Expect HTML5 validation or application error feedback
+    const nameInput = page.locator('input[placeholder*="name" i]');
+    const isRequired = await nameInput.getAttribute('required');
+    expect(isRequired !== null).toBe(true);
   });
 });

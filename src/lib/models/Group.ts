@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from 'mongoose';
+﻿import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IGroup extends Document {
   name: string;
@@ -27,5 +27,9 @@ const GroupSchema = new Schema<IGroup>({
   avatar: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now },
 });
+
+GroupSchema.index({ members: 1 });
+GroupSchema.index({ folder: 1 });
+GroupSchema.index({ createdAt: -1 });
 
 export default mongoose.models.Group || mongoose.model<IGroup>('Group', GroupSchema);
