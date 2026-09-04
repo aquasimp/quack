@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import AnimatedBackground from '@/components/ui/AnimatedBackground';
 import {
-  MessageSquare, Brain, Shield, Users, FolderTree, Zap,
+  Brain, Shield, Users, FolderTree, Zap,
   ArrowRight, ChevronRight, Lock, BarChart3
 } from 'lucide-react';
 

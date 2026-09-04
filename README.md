@@ -4,6 +4,7 @@
 
 ### AI-Powered Campus Communication & Career Intelligence Platform
 
+[![CI](https://github.com/aquasimp/quack/actions/workflows/ci.yml/badge.svg)](https://github.com/aquasimp/quack/actions/workflows/ci.yml)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org)
 [![MongoDB](https://img.shields.io/badge/MongoDB-8.0-green?logo=mongodb)](https://www.mongodb.com)
@@ -136,6 +137,27 @@ Client A                    Server                    Client B
 ```
 
 > **The server NEVER sees plaintext messages.** All encryption/decryption happens client-side.
+
+---
+
+## 🌐 Real-Time Messaging Architecture & Deployment
+
+### Serverless Constraints (Vercel) vs. Stateful WebSockets
+Qwack's frontend and Next.js App Router API routes are hosted serverlessly on **Vercel** (`quack-aquasimp.vercel.app`). Because serverless runtimes are stateless and terminate upon request completion, long-lived bidirectional WebSocket servers (such as raw `socket.io` server instances) cannot maintain persistent in-memory connections on standard serverless endpoints without encountering execution timeouts.
+
+### Architecture Topology Options
+
+| Strategy | Architecture | Latency | Operational Overhead | Best Fit For |
+|---|---|---|---|---|
+| **Managed WebSocket Gateway (Recommended)** | **Pusher Channels / Ably** | <50ms | Zero server ops; fully serverless | Production Vercel deployments |
+| **Dedicated Realtime Service** | Standalone Node.js `socket.io` server + Redis Pub/Sub | <20ms | Medium (requires VM/container e.g. Fly.io, Railway) | High-throughput, self-hosted clusters |
+| **Server-Sent Events (SSE) + REST** | One-way SSE stream for inbound + REST POST for outbound | <100ms | Low (standard HTTP/2) | Read-heavy feed broadcasting |
+
+### Data Flow & Persistence
+1. **Authenticated Transmission**: Clients submit messages via authenticated REST endpoints (`POST /api/groups/[groupId]/messages`) protected by JWT verification and role checks.
+2. **Ciphertext Storage**: Only AES-256-GCM encrypted ciphertext and IVs are persisted into MongoDB; plaintext is never stored or transmitted over wire.
+3. **Optimistic Updates**: Client UIs render sent messages immediately, updating status ticks upon server acknowledgment.
+4. **Broadcast Dispatch**: In full production, the REST route triggers a message event through the real-time gateway channel (`group-{groupId}`), pushing the ciphertext to active recipients in real time.
 
 ---
 

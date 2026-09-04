@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  FolderOpen, MessageSquare, Users, ChevronRight, ChevronDown,
+  FolderOpen, Users, ChevronRight, ChevronDown,
   Send, Pin, Shield, Plus, Hash, Megaphone, Search
 } from 'lucide-react';
 
@@ -71,7 +71,11 @@ export default function CommunicatePage() {
   const toggleFolder = (id: string) => {
     setExpandedFolders(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   };

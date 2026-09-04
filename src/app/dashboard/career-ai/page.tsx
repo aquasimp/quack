@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Brain, Upload, FileText, Target, TrendingUp, AlertTriangle,
+  Brain, Upload, FileText, Target, AlertTriangle,
   CheckCircle, ArrowRight, Sparkles, BarChart3, Clock
 } from 'lucide-react';
 

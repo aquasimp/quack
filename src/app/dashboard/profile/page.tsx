@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  User, GraduationCap, Code, Award, Briefcase, ExternalLink,
+  GraduationCap, Code, Award, Briefcase, ExternalLink,
   Edit3, Save, Link2, Globe, BookOpen, Plus, X
 } from 'lucide-react';
 
