@@ -4,17 +4,49 @@ import { connectDB } from '@/lib/db';
 import User from '@/lib/models/User';
 import Profile from '@/lib/models/Profile';
 import { signToken } from '@/lib/auth';
+import { rateLimit } from '@/lib/rateLimit';
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
-    const { name, email, password, role } = await req.json();
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'anonymous';
+    // Rate limit: 10 registrations per minute per IP
+    const rl = rateLimit(`register:${ip}`, 10, 60_000);
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: 'Too many registration requests. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(rl.reset) } }
+      );
+    }
 
-    if (!name || !email || !password) {
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+    }
+
+    const { name, email, password, role } = body;
+
+    if (!name || !email || !password || typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string') {
       return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
     }
 
-    const existing = await User.findOne({ email });
+    const safeName = name.trim().slice(0, 100);
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!safeName) {
+      return NextResponse.json({ error: 'Name cannot be empty' }, { status: 400 });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) || normalizedEmail.length > 100) {
+      return NextResponse.json({ error: 'Invalid email format' }, { status: 400 });
+    }
+
+    if (password.length < 8 || password.length > 128) {
+      return NextResponse.json({ error: 'Password must be between 8 and 128 characters' }, { status: 400 });
+    }
+
+    await connectDB();
+
+    const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {
       return NextResponse.json({ error: 'Email already registered' }, { status: 409 });
     }
@@ -24,8 +56,8 @@ export async function POST(req: NextRequest) {
     const assignedRole = ALLOWED_ROLES.includes(role) ? role : 'student';
 
     const user = await User.create({
-      name,
-      email,
+      name: safeName,
+      email: normalizedEmail,
       password: hashedPassword,
       role: assignedRole,
     });

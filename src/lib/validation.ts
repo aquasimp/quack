@@ -1,49 +1,87 @@
-﻿/**
+/**
  * Security & Input Validation Library
- * Implements default-deny allowlists for database queries and user updates.
+ * Implements strict default-deny allowlists for database queries and profile updates.
  */
 
 // Allowlist of fields that recruiters can filter on
 const ALLOWED_RECRUITER_FIELDS = new Set(['branch', 'cgpa', 'skills', 'semester']);
 
-// Allowlist of safe MongoDB query operators
-const ALLOWED_QUERY_OPERATORS = new Set([
-  '$gte',
-  '$lte',
-  '$gt',
-  '$lt',
-  '$eq',
-  '$in',
-  '$all',
-  '$regex',
+// Operator allowlists segregated by data type
+const ALLOWED_NUMERIC_OPERATORS = new Set(['$gte', '$lte', '$gt', '$lt', '$eq']);
+
+// Allowlist of fields that students are explicitly permitted to update on their profile
+const ALLOWED_STUDENT_PROFILE_FIELDS = new Set([
+  'bio',
+  'skills',
+  'projects',
+  'certifications',
+  'extracurriculars',
+  'linkedin',
+  'github',
+  'resumeUrl',
 ]);
 
+const PROTOTYPE_POLLUTION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 /**
- * Escapes regex special characters to neutralize ReDoS attacks.
+ * Escapes regex special characters to neutralize ReDoS attacks and unexpected matching.
  */
 export function escapeRegex(pattern: string): string {
   return pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
+ * Computes the maximum nesting depth of an object.
+ */
+function getObjectDepth(obj: unknown, currentDepth = 0): number {
+  if (!obj || typeof obj !== 'object') {
+    return currentDepth;
+  }
+  if (Array.isArray(obj)) {
+    let max = currentDepth + 1;
+    for (const item of obj) {
+      max = Math.max(max, getObjectDepth(item, currentDepth + 1));
+    }
+    return max;
+  }
+  let max = currentDepth + 1;
+  for (const value of Object.values(obj as Record<string, unknown>)) {
+    max = Math.max(max, getObjectDepth(value, currentDepth + 1));
+  }
+  return max;
+}
+
+/**
  * Sanitizes an LLM-generated or client-supplied MongoDB filter for recruiter search.
  * Enforces a strict default-deny policy:
  * - Only approved fields ('branch', 'cgpa', 'skills', 'semester') are accepted.
- * - Only safe operators ('$gte', '$lte', '$gt', '$lt', '$eq', '$in', '$all', '$regex') are allowed.
- * - Hostile operators ($where, $expr, $function, etc.) are strictly rejected.
- * - Regex inputs are clamped to 30 characters and sanitized.
+ * - Enforces operator specialization: numeric fields only accept numeric comparison operators.
+ * - Hostile operators ($where, $expr, $function, $accumulator, etc.) are strictly rejected.
+ * - Rejects prototype pollution payloads and deeply nested objects (depth > 2).
+ * - Clamps array lengths, regex length, and text lengths.
  */
 export function sanitizeRecruiterFilter(raw: unknown): Record<string, unknown> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return {};
   }
 
+  // Reject deeply nested structures to prevent parser exhaustion / complexity attacks
+  if (getObjectDepth(raw) > 3) {
+    return {};
+  }
+
+  const rawObj = raw as Record<string, unknown>;
   const sanitized: Record<string, unknown> = {};
-  const entries = Object.entries(raw as Record<string, unknown>);
+  const entries = Object.entries(rawObj);
+
+  // Enforce maximum condition count
+  if (entries.length > 10) {
+    return {};
+  }
 
   for (const [key, value] of entries) {
-    if (!ALLOWED_RECRUITER_FIELDS.has(key)) {
-      // Default-deny: skip any unrecognized or unauthorized field
+    // Drop prototype pollution attempts or unknown fields
+    if (PROTOTYPE_POLLUTION_KEYS.has(key) || !ALLOWED_RECRUITER_FIELDS.has(key)) {
       continue;
     }
 
@@ -56,8 +94,9 @@ export function sanitizeRecruiterFilter(raw: unknown): Record<string, unknown> {
       } else if (value && typeof value === 'object' && !Array.isArray(value)) {
         const obj = value as Record<string, unknown>;
         const sanitizedBranchOp: Record<string, unknown> = {};
+
+        // Only allow $regex or $in for branch
         if (typeof obj.$regex === 'string') {
-          // Clamp regex pattern and escape dangerous characters
           const safePattern = escapeRegex(obj.$regex.slice(0, 30));
           sanitizedBranchOp.$regex = safePattern;
           sanitizedBranchOp.$options = 'i';
@@ -80,7 +119,8 @@ export function sanitizeRecruiterFilter(raw: unknown): Record<string, unknown> {
         const opObj = value as Record<string, unknown>;
         const sanitizedOps: Record<string, number> = {};
         for (const [op, val] of Object.entries(opObj)) {
-          if (ALLOWED_QUERY_OPERATORS.has(op) && typeof val === 'number' && !isNaN(val)) {
+          // Strictly allow numeric comparison operators only
+          if (ALLOWED_NUMERIC_OPERATORS.has(op) && typeof val === 'number' && !isNaN(val)) {
             sanitizedOps[op] = Math.min(10, Math.max(0, val));
           }
         }
@@ -95,7 +135,7 @@ export function sanitizeRecruiterFilter(raw: unknown): Record<string, unknown> {
         const opObj = value as Record<string, unknown>;
         const sanitizedOps: Record<string, number> = {};
         for (const [op, val] of Object.entries(opObj)) {
-          if (ALLOWED_QUERY_OPERATORS.has(op) && typeof val === 'number' && !isNaN(val)) {
+          if (ALLOWED_NUMERIC_OPERATORS.has(op) && typeof val === 'number' && !isNaN(val)) {
             sanitizedOps[op] = Math.min(8, Math.max(1, Math.round(val)));
           }
         }
@@ -130,8 +170,9 @@ export function sanitizeRecruiterFilter(raw: unknown): Record<string, unknown> {
 }
 
 /**
- * Validates and sanitizes a user profile update payload.
- * Strictly prevents mass-assignment of sensitive fields like userId, _id, placementReadinessScore.
+ * Validates a student profile update payload using a strict default-deny allowlist.
+ * If ANY unapproved or forbidden field is present (such as userId, _id, cgpa,
+ * placementReadinessScore, role, roles, isAdmin, semester, branch), the update is REJECTED.
  */
 export function validateProfileUpdate(raw: unknown): {
   valid: boolean;
@@ -139,25 +180,39 @@ export function validateProfileUpdate(raw: unknown): {
   error?: string;
 } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { valid: false, data: {}, error: 'Invalid profile payload' };
+    return { valid: false, data: {}, error: 'Invalid profile payload: must be an object' };
   }
 
   const input = raw as Record<string, unknown>;
+  const keys = Object.keys(input);
+
+  if (keys.length === 0) {
+    return { valid: false, data: {}, error: 'Profile update cannot be empty' };
+  }
+
+  // Strict allowlisting: reject any payload containing unapproved or forbidden fields
+  for (const key of keys) {
+    if (PROTOTYPE_POLLUTION_KEYS.has(key)) {
+      return { valid: false, data: {}, error: `Prototype pollution field "${key}" is strictly forbidden` };
+    }
+    if (!ALLOWED_STUDENT_PROFILE_FIELDS.has(key)) {
+      return { valid: false, data: {}, error: `Field "${key}" cannot be modified in student profile update` };
+    }
+  }
+
   const allowedData: Record<string, unknown> = {};
 
-  if (typeof input.branch === 'string') {
-    allowedData.branch = input.branch.trim().slice(0, 50);
+  if (input.bio !== undefined) {
+    if (typeof input.bio !== 'string') {
+      return { valid: false, data: {}, error: 'Bio must be a string' };
+    }
+    allowedData.bio = input.bio.trim().slice(0, 500);
   }
 
-  if (typeof input.semester === 'number' && !isNaN(input.semester)) {
-    allowedData.semester = Math.min(8, Math.max(1, Math.round(input.semester)));
-  }
-
-  if (typeof input.cgpa === 'number' && !isNaN(input.cgpa)) {
-    allowedData.cgpa = Math.min(10, Math.max(0, parseFloat(input.cgpa.toFixed(2))));
-  }
-
-  if (Array.isArray(input.skills)) {
+  if (input.skills !== undefined) {
+    if (!Array.isArray(input.skills)) {
+      return { valid: false, data: {}, error: 'Skills must be an array of strings' };
+    }
     allowedData.skills = input.skills
       .filter((s): s is string => typeof s === 'string')
       .map((s) => s.trim().slice(0, 50))
@@ -165,7 +220,10 @@ export function validateProfileUpdate(raw: unknown): {
       .slice(0, 30);
   }
 
-  if (Array.isArray(input.certifications)) {
+  if (input.certifications !== undefined) {
+    if (!Array.isArray(input.certifications)) {
+      return { valid: false, data: {}, error: 'Certifications must be an array of strings' };
+    }
     allowedData.certifications = input.certifications
       .filter((s): s is string => typeof s === 'string')
       .map((s) => s.trim().slice(0, 100))
@@ -173,7 +231,10 @@ export function validateProfileUpdate(raw: unknown): {
       .slice(0, 20);
   }
 
-  if (Array.isArray(input.extracurriculars)) {
+  if (input.extracurriculars !== undefined) {
+    if (!Array.isArray(input.extracurriculars)) {
+      return { valid: false, data: {}, error: 'Extracurriculars must be an array of strings' };
+    }
     allowedData.extracurriculars = input.extracurriculars
       .filter((s): s is string => typeof s === 'string')
       .map((s) => s.trim().slice(0, 100))
@@ -181,25 +242,33 @@ export function validateProfileUpdate(raw: unknown): {
       .slice(0, 20);
   }
 
-  if (typeof input.bio === 'string') {
-    allowedData.bio = input.bio.trim().slice(0, 500);
-  }
-
-  if (typeof input.linkedin === 'string') {
+  if (input.linkedin !== undefined) {
+    if (typeof input.linkedin !== 'string') {
+      return { valid: false, data: {}, error: 'LinkedIn must be a string' };
+    }
     allowedData.linkedin = input.linkedin.trim().slice(0, 200);
   }
 
-  if (typeof input.github === 'string') {
+  if (input.github !== undefined) {
+    if (typeof input.github !== 'string') {
+      return { valid: false, data: {}, error: 'GitHub must be a string' };
+    }
     allowedData.github = input.github.trim().slice(0, 200);
   }
 
-  if (typeof input.resumeUrl === 'string') {
+  if (input.resumeUrl !== undefined) {
+    if (typeof input.resumeUrl !== 'string') {
+      return { valid: false, data: {}, error: 'Resume URL must be a string' };
+    }
     allowedData.resumeUrl = input.resumeUrl.trim().slice(0, 300);
   }
 
-  if (Array.isArray(input.projects)) {
+  if (input.projects !== undefined) {
+    if (!Array.isArray(input.projects)) {
+      return { valid: false, data: {}, error: 'Projects must be an array' };
+    }
     allowedData.projects = input.projects
-      .filter((p): p is Record<string, unknown> => p && typeof p === 'object')
+      .filter((p): p is Record<string, unknown> => p && typeof p === 'object' && !Array.isArray(p))
       .map((p) => ({
         name: typeof p.name === 'string' ? p.name.trim().slice(0, 100) : '',
         description: typeof p.description === 'string' ? p.description.trim().slice(0, 500) : '',
@@ -225,7 +294,7 @@ export function validateMessageInput(raw: unknown): {
   encrypted: boolean;
   error?: string;
 } {
-  if (!raw || typeof raw !== 'object') {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { valid: false, content: '', type: 'text', iv: '', encrypted: false, error: 'Invalid message payload' };
   }
 

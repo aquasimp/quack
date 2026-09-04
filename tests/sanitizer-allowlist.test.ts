@@ -1,4 +1,4 @@
-﻿import { test, describe } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   sanitizeRecruiterFilter,
@@ -78,40 +78,40 @@ describe('Security Sanitizer & Strict Allowlist Engine', () => {
   });
 
   describe('Profile Update Mass-Assignment Protection', () => {
-    test('strictly strips userId, _id, and placementReadinessScore', () => {
-      const hostileUpdate = {
-        userId: 'malicious_user_id_override',
-        _id: 'malicious_profile_id',
-        placementReadinessScore: 100,
-        role: 'tpo',
-        branch: 'CSE',
-        cgpa: 9.2,
-        skills: ['Python', 'Docker'],
-      };
-
-      const result = validateProfileUpdate(hostileUpdate);
-      assert.equal(result.valid, true);
-      assert.equal(result.data.userId, undefined);
-      assert.equal(result.data._id, undefined);
-      assert.equal(result.data.placementReadinessScore, undefined);
-      assert.equal(result.data.role, undefined);
-      assert.equal(result.data.branch, 'CSE');
-      assert.equal(result.data.cgpa, 9.2);
-      assert.deepEqual(result.data.skills, ['Python', 'Docker']);
+    test('strictly rejects forbidden field injections (cgpa, userId, role, placementReadinessScore)', () => {
+      assert.equal(validateProfileUpdate({ cgpa: 9.8 }).valid, false);
+      assert.equal(validateProfileUpdate({ userId: 'other_user_id' }).valid, false);
+      assert.equal(validateProfileUpdate({ _id: 'target_id' }).valid, false);
+      assert.equal(validateProfileUpdate({ role: 'admin' }).valid, false);
+      assert.equal(validateProfileUpdate({ placementReadinessScore: 100 }).valid, false);
+      assert.equal(validateProfileUpdate({ branch: 'CSE' }).valid, false);
     });
 
-    test('clamps and bounds profile numbers and text fields', () => {
+    test('accepts valid student profile updates and clamps bounds', () => {
+      const validUpdate = {
+        bio: 'Passionate software developer interested in distributed systems.',
+        skills: ['Python', 'Docker', 'TypeScript'],
+        github: 'github.com/student',
+        linkedin: 'linkedin.com/in/student',
+      };
+
+      const result = validateProfileUpdate(validUpdate);
+      assert.equal(result.valid, true);
+      assert.equal(result.data.bio, 'Passionate software developer interested in distributed systems.');
+      assert.deepEqual(result.data.skills, ['Python', 'Docker', 'TypeScript']);
+      assert.equal(result.data.github, 'github.com/student');
+    });
+
+    test('clamps oversized text and array fields for valid updates', () => {
       const overflowUpdate = {
-        cgpa: 15.5, // Should clamp to 10
-        semester: 12, // Should clamp to 8
         bio: 'A'.repeat(800), // Should clamp to 500 chars
+        skills: Array.from({ length: 50 }, (_, i) => `Skill-${i}`), // Should clamp to 30
       };
 
       const result = validateProfileUpdate(overflowUpdate);
       assert.equal(result.valid, true);
-      assert.equal(result.data.cgpa, 10);
-      assert.equal(result.data.semester, 8);
       assert.equal((result.data.bio as string).length, 500);
+      assert.equal((result.data.skills as string[]).length, 30);
     });
   });
 

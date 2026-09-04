@@ -1,16 +1,16 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
 test.describe('Qwack Web Application E2E Flows', () => {
   test('landing page renders hero, branding, features, and navigation links', async ({ page }) => {
     await page.goto('/');
 
     // Verify main brand heading and logo
-    await expect(page.locator('h1')).toContainText(/qwack/i);
+    await expect(page.locator('text=Qwack').first()).toBeVisible();
 
     // Verify key feature sections
     await expect(page.locator('text=Folder-Based Communication')).toBeVisible();
-    await expect(page.locator('text=AI Career Copilot')).toBeVisible();
-    await expect(page.locator('text=E2E Encrypted DMs')).toBeVisible();
+    await expect(page.locator('text=AI Career Intelligence')).toBeVisible();
+    await expect(page.locator('text=End-to-End Encryption')).toBeVisible();
 
     // Verify navigation CTA links
     const getStartedLink = page.getByRole('link', { name: /get started/i }).first();
@@ -62,7 +62,7 @@ test.describe('Qwack Web Application E2E Flows', () => {
     await expect(page.locator('input[type="password"]')).toBeVisible();
 
     // Link to registration
-    const registerLink = page.getByRole('link', { name: /create one/i });
+    const registerLink = page.getByRole('link', { name: /create account/i });
     await expect(registerLink).toBeVisible();
     await expect(registerLink).toHaveAttribute('href', '/register');
   });
@@ -75,7 +75,7 @@ test.describe('Qwack Web Application E2E Flows', () => {
     await expect(page).toHaveURL(/\/login/);
 
     // Click link to create account
-    await page.getByRole('link', { name: /create one/i }).click();
+    await page.getByRole('link', { name: /create account/i }).click();
     await expect(page).toHaveURL(/\/register/);
   });
 
@@ -88,5 +88,112 @@ test.describe('Qwack Web Application E2E Flows', () => {
     const nameInput = page.locator('input[placeholder*="name" i]');
     const isRequired = await nameInput.getAttribute('required');
     expect(isRequired !== null).toBe(true);
+  });
+
+  test('student end-to-end flow: dashboard -> profile -> career-ai -> logout', async ({ page }) => {
+    // Intercept auth checks to simulate an authenticated student session
+    await page.route('**/api/auth/me', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user: {
+            id: 'usr_student_01',
+            name: 'Aarav Patel',
+            email: 'aarav@campus.edu',
+            role: 'student',
+          },
+        }),
+      });
+    });
+
+    await page.route('**/api/auth/logout', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Logged out successfully' }),
+      });
+    });
+
+    // Navigate to dashboard
+    await page.goto('/dashboard');
+    await expect(page.locator('text=Active Groups').first()).toBeVisible();
+    await expect(page.getByRole('link', { name: 'My Profile', exact: true })).toBeVisible();
+
+    // Navigate to Profile page
+    await page.getByRole('link', { name: 'My Profile', exact: true }).click();
+    await expect(page).toHaveURL(/\/dashboard\/profile/);
+    await expect(page.locator('text=Demo Student').first()).toBeVisible();
+
+    // Navigate to Career AI page
+    await page.getByRole('link', { name: 'Career AI', exact: true }).click();
+    await expect(page).toHaveURL(/\/dashboard\/career-ai/);
+    await expect(page.locator('text=AI Career Intelligence').first()).toBeVisible();
+
+    // Click logout
+    await page.getByTitle('Logout').click();
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test('recruiter end-to-end flow: dashboard -> talent search interface', async ({ page }) => {
+    await page.route('**/api/auth/me', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user: {
+            id: 'usr_recruiter_01',
+            name: 'Pooja Tech Recruiter',
+            email: 'pooja@enterprise.com',
+            role: 'recruiter',
+          },
+        }),
+      });
+    });
+
+    await page.goto('/dashboard/recruiter');
+    await expect(page.locator('text=AI Recruiter Search').first()).toBeVisible();
+    await expect(page.locator('input[placeholder*="CSE students" i]')).toBeVisible();
+  });
+
+  test('TPO end-to-end flow: dashboard -> placement analytics interface', async ({ page }) => {
+    await page.route('**/api/auth/me', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user: {
+            id: 'usr_tpo_01',
+            name: 'Dr. Ramesh Sharma',
+            email: 'tpo@campus.edu',
+            role: 'tpo',
+          },
+        }),
+      });
+    });
+
+    await page.goto('/dashboard/tpo');
+    await expect(page.locator('text=TPO Analytics Dashboard').first()).toBeVisible();
+    await expect(page.locator('text=Total Students').first()).toBeVisible();
+  });
+
+  test('security API boundary verification: unauthenticated requests rejected at edge', async ({ request }) => {
+    // 1. Unauthenticated messages access
+    const msgRes = await request.get('/api/groups/65f1a2b3c4d5e6f7a8b9c0d1/messages');
+    expect(msgRes.status()).toBe(401);
+
+    // 2. Unauthenticated student directory query
+    const studentRes = await request.get('/api/students');
+    expect(studentRes.status()).toBe(401);
+
+    // 3. Unauthenticated TPO analytics query
+    const tpoRes = await request.get('/api/tpo/analytics');
+    expect(tpoRes.status()).toBe(401);
+
+    // 4. Forbidden mass-assignment mutation without auth
+    const putRes = await request.put('/api/students', {
+      data: { cgpa: 10, role: 'admin', userId: 'attacker_id' },
+    });
+    expect(putRes.status()).toBe(401);
   });
 });

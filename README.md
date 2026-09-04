@@ -119,6 +119,40 @@ src/
 
 ---
 
+---
+
+## 🛡️ Security Model & Hardening (Phase 3)
+
+| Security Domain | Threat Addressed | Defense Implementation |
+|---|---|---|
+| **IDOR & Anti-Enumeration** | Unauthorized group access & ID enumeration | Scoped `canAccessGroup` and `canPostToGroup` authorization; uniform HTTP 404 responses for non-existent and unauthorized private resources. |
+| **Profile Mass-Assignment** | Student privilege escalation & CGPA tampering | Strict default-deny allowlist rejecting unapproved fields (`cgpa`, `userId`, `_id`, `role`, `roles`, `isAdmin`, `placementReadinessScore`). |
+| **NoSQL / AI Query Injection** | Malicious LLM filter generation & JS injection | Default-deny `sanitizeRecruiterFilter` neutralizing `$where`, `$expr`, `$function`, prototype pollution, and restricting query depth (≤ 3). |
+| **AI Output Validation** | Malformed model responses & hallucinated schemas | Zod-style schema validators with fallback normalization for resume analysis and career roadmaps. |
+| **Abuse & Rate Limiting** | Brute force & quota exhaustion | Token bucket rate limiting (10 req/min) on auth, messaging, and expensive AI endpoints with `Retry-After` headers. |
+| **Session & Cookie Security** | Token theft & CSRF attacks | httpOnly, secure, SameSite=Lax JWT cookie management with synchronized logout clearing. |
+
+---
+
+## 🧪 Testing & Quality Verification
+
+```bash
+# Run unit, crypto, and security regression tests (68 tests)
+npm test
+
+# Run TypeScript compilation checks
+npx tsc --noEmit
+
+# Run ESLint checks (0 warnings, 0 errors)
+npm run lint
+
+# Verify Next.js production build (24/24 static & dynamic routes)
+npm run build
+
+# Run Playwright End-to-End browser tests (9 workflows)
+npm run test:e2e
+```
+
 ## 🔐 Security Architecture
 
 ```

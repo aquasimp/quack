@@ -22,4 +22,6 @@ const AnnouncementSchema = new Schema<IAnnouncement>({
   createdAt: { type: Date, default: Date.now },
 });
 
+AnnouncementSchema.index({ createdAt: -1 });
+
 export default mongoose.models.Announcement || mongoose.model<IAnnouncement>('Announcement', AnnouncementSchema);

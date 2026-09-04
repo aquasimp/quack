@@ -17,21 +17,24 @@ export async function GET() {
     await connectDB();
 
     const totalStudents = await User.countDocuments({ role: 'student' });
-    const profiles = await Profile.find();
+    // Performance optimization: project only the 3 fields needed for aggregate analytics
+    const profiles = await Profile.find().select('cgpa branch skills').lean();
 
     const avgCgpa = profiles.length > 0
-      ? profiles.reduce((sum, p) => sum + p.cgpa, 0) / profiles.length
+      ? profiles.reduce((sum, p) => sum + (p.cgpa || 0), 0) / profiles.length
       : 0;
 
-    const eligibleAbove7 = profiles.filter(p => p.cgpa >= 7).length;
-    const eligibleAbove8 = profiles.filter(p => p.cgpa >= 8).length;
+    const eligibleAbove7 = profiles.filter(p => (p.cgpa || 0) >= 7).length;
+    const eligibleAbove8 = profiles.filter(p => (p.cgpa || 0) >= 8).length;
 
     // Skill distribution
     const skillMap: Record<string, number> = {};
     profiles.forEach(p => {
-      p.skills.forEach((skill: string) => {
-        skillMap[skill] = (skillMap[skill] || 0) + 1;
-      });
+      if (Array.isArray(p.skills)) {
+        p.skills.forEach((skill: string) => {
+          skillMap[skill] = (skillMap[skill] || 0) + 1;
+        });
+      }
     });
 
     const topSkills = Object.entries(skillMap)

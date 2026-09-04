@@ -1,4 +1,5 @@
 import { generateContent } from './gemini';
+import { validateCareerAdvice } from './aiValidation';
 
 export interface CareerAdvice {
   currentLevel: string;
@@ -38,7 +39,8 @@ Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
   try {
     const response = await generateContent(prompt);
     const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    return JSON.parse(cleaned);
+    const parsed = JSON.parse(cleaned);
+    return validateCareerAdvice(parsed, targetRole);
   } catch {
     return {
       currentLevel: 'Unknown',

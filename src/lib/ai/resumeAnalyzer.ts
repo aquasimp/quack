@@ -1,4 +1,5 @@
 import { generateContent } from './gemini';
+import { validateResumeAnalysis } from './aiValidation';
 
 export interface ResumeAnalysis {
   readinessScore: number;
@@ -40,7 +41,8 @@ Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
   try {
     const response = await generateContent(prompt);
     const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    return JSON.parse(cleaned);
+    const parsed = JSON.parse(cleaned);
+    return validateResumeAnalysis(parsed);
   } catch {
     return {
       readinessScore: 0,

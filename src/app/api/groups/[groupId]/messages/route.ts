@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import { connectDB } from '@/lib/db';
 import Message from '@/lib/models/Message';
@@ -6,6 +6,7 @@ import Group from '@/lib/models/Group';
 import { getAuthUser } from '@/lib/auth';
 import { rateLimit } from '@/lib/rateLimit';
 import { validateMessageInput } from '@/lib/validation';
+import { canAccessGroup, canPostToGroup } from '@/lib/permissions';
 
 export async function GET(
   req: NextRequest,
@@ -25,19 +26,12 @@ export async function GET(
     await connectDB();
 
     // Verify group existence and authorization
-    const group = await Group.findById(groupId).select('members admins createdBy');
+    const group = await Group.findById(groupId).select('members admins createdBy type');
     if (!group) {
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
-    const userIdStr = authUser.userId.toString();
-    const isMember =
-      group.members?.some((m: mongoose.Types.ObjectId) => m.toString() === userIdStr) ||
-      group.admins?.some((a: mongoose.Types.ObjectId) => a.toString() === userIdStr) ||
-      group.createdBy?.toString() === userIdStr ||
-      ['tpo', 'faculty'].includes(authUser.role);
-
-    if (!isMember) {
+    if (!canAccessGroup(group, authUser)) {
       // 404 on unauthorized access to prevent private group enumeration
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
@@ -94,19 +88,12 @@ export async function POST(
     await connectDB();
 
     // Verify group existence and authorization
-    const group = await Group.findById(groupId).select('members admins createdBy');
+    const group = await Group.findById(groupId).select('members admins createdBy type');
     if (!group) {
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
-    const userIdStr = authUser.userId.toString();
-    const isMember =
-      group.members?.some((m: mongoose.Types.ObjectId) => m.toString() === userIdStr) ||
-      group.admins?.some((a: mongoose.Types.ObjectId) => a.toString() === userIdStr) ||
-      group.createdBy?.toString() === userIdStr ||
-      ['tpo', 'faculty'].includes(authUser.role);
-
-    if (!isMember) {
+    if (!canPostToGroup(group, authUser)) {
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
