@@ -41,3 +41,11 @@ jobs:
         run: npm run build
         env:
           JWT_SECRET: "ci-build-verification-secret-32-chars-long"
+
+      - name: Install Playwright Chromium browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E test suite
+        run: npm run test:e2e
+        env:
+          JWT_SECRET: "ci-build-verification-secret-32-chars-long"
