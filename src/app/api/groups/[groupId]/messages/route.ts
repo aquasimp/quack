@@ -8,6 +8,11 @@ export async function GET(
   { params }: { params: Promise<{ groupId: string }> }
 ) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
     await connectDB();
     const { groupId } = await params;
     const { searchParams } = new URL(req.url);

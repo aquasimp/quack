@@ -20,15 +20,18 @@ export async function POST(req: NextRequest) {
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
+    const ALLOWED_ROLES = ['student', 'faculty', 'tpo', 'recruiter'] as const;
+    const assignedRole = ALLOWED_ROLES.includes(role) ? role : 'student';
+
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
-      role: role || 'student',
+      role: assignedRole,
     });
 
     // Create profile for students
-    if (role === 'student' || !role) {
+    if (assignedRole === 'student') {
       await Profile.create({ userId: user._id });
     }
 

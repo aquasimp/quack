@@ -2,9 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Profile from '@/lib/models/Profile';
 import { parseRecruiterQuery } from '@/lib/ai/recruiterQuery';
+import { getAuthUser } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+    if (!['recruiter', 'tpo', 'faculty'].includes(authUser.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { query } = await req.json();
 
     if (!query) {

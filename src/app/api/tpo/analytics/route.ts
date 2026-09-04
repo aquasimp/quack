@@ -2,9 +2,18 @@ import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Profile from '@/lib/models/Profile';
 import User from '@/lib/models/User';
+import { getAuthUser } from '@/lib/auth';
 
 export async function GET() {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+    if (!['tpo', 'faculty'].includes(authUser.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     await connectDB();
 
     const totalStudents = await User.countDocuments({ role: 'student' });

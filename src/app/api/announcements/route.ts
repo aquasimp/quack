@@ -5,6 +5,11 @@ import { getAuthUser } from '@/lib/auth';
 
 export async function GET() {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
     await connectDB();
     const announcements = await Announcement.find()
       .populate('sender', 'name email role')

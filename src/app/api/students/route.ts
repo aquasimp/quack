@@ -6,6 +6,11 @@ import { getAuthUser } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
     await connectDB();
     const { searchParams } = new URL(req.url);
     const branch = searchParams.get('branch');
